@@ -27,11 +27,11 @@ Then open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 - `/reminders` - One-off family reminders with local add/complete/reopen/delete/filter flow
 - `/budget` - Adult-only manual budget companion
 - `/kids` - Kid-friendly money goals, wallet activity, chores, and parent approval flow
-- `/maintain` - Home and vehicle maintenance reminders
+- `/maintain` - Home and vehicle maintenance with local add/complete/filter flow for date and mileage tasks
 
 ## Next Build Steps
 
 - Add authentication and household roles.
 - Add database schema for family, budget, kids money, and maintenance data.
-- Convert the static dashboard sections into real routes and forms.
+- Connect local interactive sections to persistent storage.
 - Wire budget forms to the tested paycheck allocation engine.
