@@ -22,7 +22,7 @@ Then open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 ## Initial App Areas
 
 - `/` - Family dashboard
-- `/calendar` - Shared family calendar
+- `/calendar` - Shared family calendar with local add-event flow and filters
 - `/lists` - Shopping and household lists
 - `/reminders` - One-off family reminders
 - `/budget` - Adult-only manual budget companion
