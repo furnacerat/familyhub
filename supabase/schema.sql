@@ -1,16 +1,20 @@
 create extension if not exists "pgcrypto";
 
-do $$ begin
+do $$
+begin
   create type public.household_role as enum ('owner', 'adult', 'member', 'child');
 exception
   when duplicate_object then null;
-end $$;
+end;
+$$;
 
-do $$ begin
+do $$
+begin
   create type public.budget_priority as enum ('critical', 'high', 'normal', 'low');
 exception
   when duplicate_object then null;
-end $$;
+end;
+$$;
 
 create table if not exists public.households (
   id uuid primary key default gen_random_uuid(),
