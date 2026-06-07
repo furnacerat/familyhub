@@ -375,6 +375,39 @@ alter table public.budget_paychecks enable row level security;
 alter table public.budget_bills enable row level security;
 alter table public.budget_reserves enable row level security;
 
+drop policy if exists "household members read household" on public.households;
+drop policy if exists "household members read profiles" on public.profiles;
+drop policy if exists "owners update profiles" on public.profiles;
+drop policy if exists "owners read household invites" on public.household_invites;
+drop policy if exists "owners create household invites" on public.household_invites;
+drop policy if exists "owners update household invites" on public.household_invites;
+drop policy if exists "family read calendar" on public.calendar_events;
+drop policy if exists "family write calendar" on public.calendar_events;
+drop policy if exists "family read lists" on public.household_lists;
+drop policy if exists "family write lists" on public.household_lists;
+drop policy if exists "family read list items" on public.list_items;
+drop policy if exists "family write list items" on public.list_items;
+drop policy if exists "family read reminders" on public.reminders;
+drop policy if exists "family write reminders" on public.reminders;
+drop policy if exists "family read maintenance tasks" on public.maintenance_tasks;
+drop policy if exists "adult write maintenance tasks" on public.maintenance_tasks;
+drop policy if exists "family read maintenance completions" on public.maintenance_completions;
+drop policy if exists "adult write maintenance completions" on public.maintenance_completions;
+drop policy if exists "family read kid profiles" on public.kid_profiles;
+drop policy if exists "adult write kid profiles" on public.kid_profiles;
+drop policy if exists "family read kid goals" on public.kid_goals;
+drop policy if exists "adult write kid goals" on public.kid_goals;
+drop policy if exists "family read kid chores" on public.kid_chores;
+drop policy if exists "adult write kid chores" on public.kid_chores;
+drop policy if exists "family read kid transactions" on public.kid_transactions;
+drop policy if exists "adult write kid transactions" on public.kid_transactions;
+drop policy if exists "budget users read paychecks" on public.budget_paychecks;
+drop policy if exists "budget users write paychecks" on public.budget_paychecks;
+drop policy if exists "budget users read bills" on public.budget_bills;
+drop policy if exists "budget users write bills" on public.budget_bills;
+drop policy if exists "budget users read reserves" on public.budget_reserves;
+drop policy if exists "budget users write reserves" on public.budget_reserves;
+
 create policy "household members read household"
   on public.households for select
   using (id = public.current_household_id());
