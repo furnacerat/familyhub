@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
+  const inviteToken = String(formData.get("inviteToken") ?? "");
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signInWithPassword({
@@ -18,12 +19,13 @@ export async function signIn(formData: FormData) {
     redirect(`/login?message=${encodeURIComponent(error.message)}`);
   }
 
-  redirect("/");
+  redirect(inviteToken ? `/invite/${inviteToken}` : "/");
 }
 
 export async function signUp(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
+  const inviteToken = String(formData.get("inviteToken") ?? "");
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signUp({
@@ -35,7 +37,7 @@ export async function signUp(formData: FormData) {
     redirect(`/login?message=${encodeURIComponent(error.message)}`);
   }
 
-  redirect("/setup");
+  redirect(inviteToken ? `/invite/${inviteToken}` : "/setup");
 }
 
 export async function signOut() {

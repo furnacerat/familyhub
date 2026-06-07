@@ -29,6 +29,19 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.household_invites (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  email text not null,
+  role public.household_role not null default 'member',
+  budget_access boolean not null default false,
+  token uuid not null default gen_random_uuid() unique,
+  expires_at timestamptz not null default (now() + interval '14 days'),
+  accepted_at timestamptz,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.calendar_events (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references public.households(id) on delete cascade,
@@ -259,8 +272,107 @@ begin
 end;
 $$;
 
+create or replace function public.get_household_invite(invite_token uuid)
+returns table (
+  email text,
+  role public.household_role,
+  budget_access boolean,
+  household_name text,
+  expires_at timestamptz,
+  accepted_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    invite.email,
+    invite.role,
+    invite.budget_access,
+    household.name as household_name,
+    invite.expires_at,
+    invite.accepted_at
+  from public.household_invites invite
+  join public.households household on household.id = invite.household_id
+  where invite.token = invite_token
+  limit 1
+$$;
+
+create or replace function public.accept_household_invite(
+  invite_token uuid,
+  display_name text
+)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  invite public.household_invites;
+  new_profile public.profiles;
+  current_email text;
+begin
+  if auth.uid() is null then
+    raise exception 'Must be signed in to accept an invite';
+  end if;
+
+  if exists (select 1 from public.profiles where id = auth.uid()) then
+    raise exception 'This account is already attached to a household';
+  end if;
+
+  select * into invite
+  from public.household_invites
+  where token = invite_token
+  limit 1;
+
+  if invite.id is null then
+    raise exception 'Invite not found';
+  end if;
+
+  if invite.accepted_at is not null then
+    raise exception 'Invite has already been accepted';
+  end if;
+
+  if invite.expires_at < now() then
+    raise exception 'Invite has expired';
+  end if;
+
+  current_email := lower(coalesce(auth.jwt() ->> 'email', ''));
+
+  if lower(invite.email) <> current_email then
+    raise exception 'This invite was sent to a different email address';
+  end if;
+
+  insert into public.profiles (
+    id,
+    household_id,
+    email,
+    display_name,
+    role,
+    budget_access
+  )
+  values (
+    auth.uid(),
+    invite.household_id,
+    current_email,
+    display_name,
+    invite.role,
+    invite.budget_access
+  )
+  returning * into new_profile;
+
+  update public.household_invites
+  set accepted_at = now()
+  where id = invite.id;
+
+  return new_profile;
+end;
+$$;
+
 alter table public.households enable row level security;
 alter table public.profiles enable row level security;
+alter table public.household_invites enable row level security;
 alter table public.calendar_events enable row level security;
 alter table public.household_lists enable row level security;
 alter table public.list_items enable row level security;
@@ -286,6 +398,31 @@ create policy "household members read profiles"
 create policy "owners update profiles"
   on public.profiles for update
   using (
+    household_id = public.current_household_id()
+    and public.current_profile_role() = 'owner'
+  );
+
+create policy "owners read household invites"
+  on public.household_invites for select
+  using (
+    household_id = public.current_household_id()
+    and public.current_profile_role() = 'owner'
+  );
+
+create policy "owners create household invites"
+  on public.household_invites for insert
+  with check (
+    household_id = public.current_household_id()
+    and public.current_profile_role() = 'owner'
+  );
+
+create policy "owners update household invites"
+  on public.household_invites for update
+  using (
+    household_id = public.current_household_id()
+    and public.current_profile_role() = 'owner'
+  )
+  with check (
     household_id = public.current_household_id()
     and public.current_profile_role() = 'owner'
   );

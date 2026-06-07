@@ -17,7 +17,7 @@ import { createClient } from "@/lib/supabase/server";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string }>;
+  searchParams: Promise<{ message?: string; invite?: string }>;
 }) {
   const supabase = await createClient();
   const {
@@ -28,7 +28,7 @@ export default async function LoginPage({
     redirect("/");
   }
 
-  const { message } = await searchParams;
+  const { message, invite } = await searchParams;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,_#fbfaf7_0%,_#eef4f8_100%)] px-4 py-10">
@@ -49,6 +49,7 @@ export default async function LoginPage({
             </div>
           ) : null}
           <form action={signIn} className="space-y-3">
+            <input name="inviteToken" type="hidden" value={invite ?? ""} />
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" name="email" type="email" required />
@@ -62,6 +63,7 @@ export default async function LoginPage({
             </Button>
           </form>
           <form action={signUp} className="space-y-3 border-t pt-5">
+            <input name="inviteToken" type="hidden" value={invite ?? ""} />
             <p className="text-sm font-medium">First time here?</p>
             <div className="grid gap-2">
               <Label htmlFor="signup-email">Email</Label>

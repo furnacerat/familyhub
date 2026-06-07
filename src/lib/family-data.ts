@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Sparkles,
+  UserPlus,
   Wrench,
 } from "lucide-react";
 
@@ -58,6 +59,12 @@ export const navItems: NavItem[] = [
     href: "/maintain",
     icon: Wrench,
     access: ["Owner", "Adult", "Member"],
+  },
+  {
+    label: "Invites",
+    href: "/settings/invites",
+    icon: UserPlus,
+    access: ["Owner"],
   },
 ];
 

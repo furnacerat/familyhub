@@ -38,6 +38,10 @@ creating your first household. It creates:
 After the SQL is applied, create an account at `/login`, then finish owner setup
 at `/setup`.
 
+Owners can create household invites at `/settings/invites`. The app generates a
+private invite link and opens a prefilled email draft. Automatic email delivery
+can be added later with a server-only mail provider.
+
 ## Initial App Areas
 
 - `/` - Family dashboard
@@ -51,6 +55,6 @@ at `/setup`.
 ## Next Build Steps
 
 - Apply the Supabase schema in the hosted project.
-- Add invite/manage-family screens for owner role.
+- Add member management and invite revocation screens for owner role.
 - Connect local interactive sections to persistent storage.
 - Wire budget forms to the tested paycheck allocation engine.
