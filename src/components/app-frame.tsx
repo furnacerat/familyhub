@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Bell, ShieldCheck } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Bell, LogOut, ShieldCheck } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { navItems } from "@/lib/family-data";
 
@@ -35,6 +36,15 @@ export function AppFrame({ children }: AppFrameProps) {
 }
 
 function AppHeader() {
+  const router = useRouter();
+
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
     <header className="mb-4 flex items-center justify-between rounded-lg border border-white/80 bg-white/82 px-3 py-3 shadow-sm backdrop-blur md:px-4">
       <Link href="/" className="flex items-center gap-3">
@@ -58,6 +68,19 @@ function AppHeader() {
             </Button>
           </TooltipTrigger>
           <TooltipContent>Notifications</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Sign out"
+              onClick={handleSignOut}
+            >
+              <LogOut className="size-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Sign out</TooltipContent>
         </Tooltip>
         <Avatar className="size-9 border border-border">
           <AvatarFallback>AF</AvatarFallback>

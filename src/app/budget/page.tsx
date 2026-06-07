@@ -14,8 +14,18 @@ import {
 } from "@/components/ui/card";
 import { formatMoney } from "@/lib/budget-engine";
 import { sampleBills, samplePaychecks } from "@/lib/budget-sample-data";
+import { canAccessBudget, requireProfile } from "@/lib/supabase/auth";
+import { redirect } from "next/navigation";
 
-export default function BudgetPage() {
+export const dynamic = "force-dynamic";
+
+export default async function BudgetPage() {
+  const profile = await requireProfile();
+
+  if (!canAccessBudget(profile)) {
+    redirect("/");
+  }
+
   return (
     <AppFrame>
       <PageHeader

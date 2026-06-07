@@ -19,6 +19,25 @@ npm run dev
 
 Then open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 
+## Supabase Setup
+
+Local secrets live in `.env.local`, which is ignored by Git. Copy `.env.example`
+when setting up another machine.
+
+Run the SQL in `supabase/schema.sql` inside the Supabase SQL editor before
+creating your first household. It creates:
+
+- household profiles and roles
+- row level security policies
+- shared calendar/list/reminder tables
+- kids money tables
+- maintenance tables
+- budget tables with adult-only budget access
+- first-household setup RPC
+
+After the SQL is applied, create an account at `/login`, then finish owner setup
+at `/setup`.
+
 ## Initial App Areas
 
 - `/` - Family dashboard
@@ -31,7 +50,7 @@ Then open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 
 ## Next Build Steps
 
-- Add authentication and household roles.
-- Add database schema for family, budget, kids money, and maintenance data.
+- Apply the Supabase schema in the hosted project.
+- Add invite/manage-family screens for owner role.
 - Connect local interactive sections to persistent storage.
 - Wire budget forms to the tested paycheck allocation engine.
