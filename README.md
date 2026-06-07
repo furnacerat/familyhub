@@ -26,7 +26,7 @@ Then open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 - `/lists` - Shopping and household lists with local add/toggle/delete/filter flow
 - `/reminders` - One-off family reminders with local add/complete/reopen/delete/filter flow
 - `/budget` - Adult-only manual budget companion
-- `/kids` - Kid-friendly money goals
+- `/kids` - Kid-friendly money goals, wallet activity, chores, and parent approval flow
 - `/maintain` - Home and vehicle maintenance reminders
 
 ## Next Build Steps
