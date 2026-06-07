@@ -16,31 +16,46 @@ export type Role = "Owner" | "Adult" | "Child" | "Member";
 
 export type NavItem = {
   label: string;
+  href: string;
   icon: typeof Home;
   access: Role[];
 };
 
 export const navItems: NavItem[] = [
-  { label: "Home", icon: Home, access: ["Owner", "Adult", "Child", "Member"] },
+  {
+    label: "Home",
+    href: "/",
+    icon: Home,
+    access: ["Owner", "Adult", "Child", "Member"],
+  },
   {
     label: "Calendar",
+    href: "/calendar",
     icon: CalendarDays,
     access: ["Owner", "Adult", "Child", "Member"],
   },
   {
     label: "Lists",
+    href: "/lists",
     icon: ShoppingCart,
     access: ["Owner", "Adult", "Child", "Member"],
   },
   {
     label: "Reminders",
+    href: "/reminders",
     icon: CheckCircle2,
     access: ["Owner", "Adult", "Child", "Member"],
   },
-  { label: "Budget", icon: Banknote, access: ["Owner", "Adult"] },
-  { label: "Kids", icon: PiggyBank, access: ["Owner", "Adult", "Child"] },
+  { label: "Budget", href: "/budget", icon: Banknote, access: ["Owner", "Adult"] },
+  {
+    label: "Kids",
+    href: "/kids",
+    icon: PiggyBank,
+    access: ["Owner", "Adult", "Child"],
+  },
   {
     label: "Maintain",
+    href: "/maintain",
     icon: Wrench,
     access: ["Owner", "Adult", "Member"],
   },
@@ -69,30 +84,59 @@ export const householdStats = [
 
 export const todaysSchedule = [
   {
+    date: "Jun 6",
     time: "7:45 AM",
     title: "School drop-off",
     person: "Family",
+    location: "Elementary entrance",
     color: "bg-sky-500",
   },
   {
+    date: "Jun 6",
     time: "4:30 PM",
     title: "Practice",
     person: "Avery",
+    location: "Field 3",
     color: "bg-emerald-500",
   },
   {
+    date: "Jun 6",
     time: "6:15 PM",
     title: "Dinner prep",
     person: "Jordan",
+    location: "Home",
     color: "bg-amber-500",
+  },
+  {
+    date: "Jun 7",
+    time: "10:00 AM",
+    title: "Grocery pickup",
+    person: "Taylor",
+    location: "Market",
+    color: "bg-rose-500",
+  },
+  {
+    date: "Jun 9",
+    time: "3:15 PM",
+    title: "Dentist appointment",
+    person: "Mia",
+    location: "Main Street Dental",
+    color: "bg-violet-500",
   },
 ];
 
 export const shoppingItems = [
-  { name: "Milk", area: "Groceries", checked: false },
-  { name: "Laundry detergent", area: "House", checked: false },
-  { name: "Dog food", area: "Pets", checked: true },
-  { name: "AA batteries", area: "Hardware", checked: false },
+  { name: "Milk", area: "Groceries", addedBy: "Mia", checked: false },
+  {
+    name: "Laundry detergent",
+    area: "House",
+    addedBy: "Jordan",
+    checked: false,
+  },
+  { name: "Dog food", area: "Pets", addedBy: "Avery", checked: true },
+  { name: "AA batteries", area: "Hardware", addedBy: "Taylor", checked: false },
+  { name: "Apples", area: "Groceries", addedBy: "Mia", checked: false },
+  { name: "Air filter", area: "Maintenance", addedBy: "Jordan", checked: false },
 ];
 
 export const reminders = [
@@ -101,18 +145,28 @@ export const reminders = [
     due: "Tonight",
     owner: "Mia",
     status: "Open",
+    priority: "Normal",
   },
   {
     title: "Call dentist",
     due: "Tomorrow",
     owner: "Jordan",
     status: "Open",
+    priority: "High",
   },
   {
     title: "Permission slip",
     due: "Friday",
     owner: "Taylor",
     status: "Needs adult",
+    priority: "High",
+  },
+  {
+    title: "Pack practice bag",
+    due: "Saturday morning",
+    owner: "Avery",
+    status: "Open",
+    priority: "Normal",
   },
 ];
 
@@ -168,6 +222,7 @@ export const kidsMoney = [
     saved: 18,
     target: 35,
     next: "$5 allowance due Sunday",
+    chores: ["Trash bins", "Feed dog"],
   },
   {
     name: "Mia",
@@ -176,6 +231,7 @@ export const kidsMoney = [
     saved: 28,
     target: 50,
     next: "Chore approval pending",
+    chores: ["Dishes", "Room reset"],
   },
 ];
 
@@ -185,6 +241,8 @@ export const maintenanceTasks = [
     appliesTo: "House",
     due: "Due in 5 days",
     cadence: "Every 90 days",
+    lastDone: "Mar 13",
+    assignedTo: "Jordan",
     icon: Home,
   },
   {
@@ -192,6 +250,8 @@ export const maintenanceTasks = [
     appliesTo: "Family van",
     due: "Overdue by 200 miles",
     cadence: "Every 5,000 miles",
+    lastDone: "151,230 mi",
+    assignedTo: "Taylor",
     icon: Car,
   },
   {
@@ -199,7 +259,57 @@ export const maintenanceTasks = [
     appliesTo: "Whole house",
     due: "Next week",
     cadence: "Monthly",
+    lastDone: "May 8",
+    assignedTo: "Family",
     icon: ShieldCheck,
+  },
+];
+
+export const paychecks = [
+  {
+    earner: "Jordan",
+    amount: "$1,850.00",
+    date: "Jun 12",
+    cadence: "Biweekly",
+    status: "Expected",
+  },
+  {
+    earner: "Taylor",
+    amount: "$1,275.00",
+    date: "Jun 19",
+    cadence: "Biweekly",
+    status: "Expected",
+  },
+];
+
+export const billCatalog = [
+  {
+    name: "Mortgage",
+    category: "Housing",
+    amount: "$950",
+    due: "Jun 15",
+    status: "Planned",
+  },
+  {
+    name: "Electric",
+    category: "Utilities",
+    amount: "$180",
+    due: "Jun 13",
+    status: "Pay first",
+  },
+  {
+    name: "Car insurance",
+    category: "Insurance",
+    amount: "$225",
+    due: "Jun 18",
+    status: "Planned",
+  },
+  {
+    name: "Phone",
+    category: "Utilities",
+    amount: "$165",
+    due: "Jun 21",
+    status: "Upcoming",
   },
 ];
 

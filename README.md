@@ -21,13 +21,13 @@ Then open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 
 ## Initial App Areas
 
-- Family dashboard
-- Shared calendar snapshot
-- Shopping list
-- Reminders
-- Adult-only budget companion
-- Kids money goals
-- Home maintenance reminders
+- `/` - Family dashboard
+- `/calendar` - Shared family calendar
+- `/lists` - Shopping and household lists
+- `/reminders` - One-off family reminders
+- `/budget` - Adult-only manual budget companion
+- `/kids` - Kid-friendly money goals
+- `/maintain` - Home and vehicle maintenance reminders
 
 ## Next Build Steps
 
