@@ -1,21 +1,5 @@
 create extension if not exists "pgcrypto";
 
-do $$
-begin
-  create type public.household_role as enum ('owner', 'adult', 'member', 'child');
-exception
-  when duplicate_object then null;
-end;
-$$;
-
-do $$
-begin
-  create type public.budget_priority as enum ('critical', 'high', 'normal', 'low');
-exception
-  when duplicate_object then null;
-end;
-$$;
-
 create table if not exists public.households (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -27,7 +11,7 @@ create table if not exists public.profiles (
   household_id uuid not null references public.households(id) on delete cascade,
   email text not null,
   display_name text not null,
-  role public.household_role not null default 'member',
+  role text not null default 'member' check (role in ('owner', 'adult', 'member', 'child')),
   budget_access boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -37,7 +21,7 @@ create table if not exists public.household_invites (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references public.households(id) on delete cascade,
   email text not null,
-  role public.household_role not null default 'member',
+  role text not null default 'member' check (role in ('owner', 'adult', 'member', 'child')),
   budget_access boolean not null default false,
   token uuid not null default gen_random_uuid() unique,
   expires_at timestamptz not null default (now() + interval '14 days'),
@@ -180,7 +164,7 @@ create table if not exists public.budget_bills (
   amount_cents integer not null,
   due_date date not null,
   paid boolean not null default false,
-  priority public.budget_priority not null default 'normal',
+  priority text not null default 'normal' check (priority in ('critical', 'high', 'normal', 'low')),
   minimum_payment_cents integer,
   can_split boolean not null default false,
   has_late_fee_risk boolean not null default false,
@@ -210,7 +194,7 @@ as $$
 $$;
 
 create or replace function public.current_profile_role()
-returns public.household_role
+returns text
 language sql
 security definer
 set search_path = public
@@ -279,7 +263,7 @@ $$;
 create or replace function public.get_household_invite(invite_token uuid)
 returns table (
   email text,
-  role public.household_role,
+  role text,
   budget_access boolean,
   household_name text,
   expires_at timestamptz,

@@ -123,9 +123,7 @@ export type Database = {
         };
       };
     };
-    Enums: {
-      household_role: HouseholdRole;
-    };
+    Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
 };
