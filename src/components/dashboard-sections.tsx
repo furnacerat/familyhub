@@ -20,9 +20,13 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
+  formatMoney,
+  getAllocationSummary,
+  type AllocationItem,
+} from "@/lib/budget-engine";
+import { sampleAllocationPlan } from "@/lib/budget-sample-data";
+import {
   buildSteps,
-  budgetPlan,
-  cashFlow,
   householdStats,
   kidsMoney,
   maintenanceTasks,
@@ -192,6 +196,30 @@ export function OverviewGrid() {
 }
 
 export function BudgetCompanion() {
+  const plan = sampleAllocationPlan;
+  const summary = getAllocationSummary(plan);
+  const cashFlow = [
+    {
+      label: "Income",
+      value: plan.startingCents,
+      color: "bg-emerald-500",
+    },
+    {
+      label: "Allocated",
+      value: plan.allocatedCents,
+      color: "bg-sky-500",
+    },
+    {
+      label: "Buffer",
+      value: plan.bufferCents,
+      color: "bg-amber-500",
+    },
+    {
+      label: "Flexible",
+      value: plan.flexibleCents,
+      color: "bg-rose-500",
+    },
+  ];
   const total = cashFlow.reduce((sum, item) => sum + item.value, 0);
 
   return (
@@ -203,10 +231,12 @@ export function BudgetCompanion() {
               <CardDescription className="text-slate-300">
                 Adult budget companion
               </CardDescription>
-              <CardTitle className="text-3xl">{budgetPlan.paycheck}</CardTitle>
+              <CardTitle className="text-3xl">
+                {formatMoney(plan.startingCents)}
+              </CardTitle>
             </div>
             <Badge className="rounded-md bg-sky-500 text-white">
-              {budgetPlan.date}
+              {formatDate(plan.paycheck.payDate)}
             </Badge>
           </div>
         </CardHeader>
@@ -215,22 +245,27 @@ export function BudgetCompanion() {
             <div className="rounded-lg bg-white/10 p-3">
               <p className="text-sm text-slate-300">Covered</p>
               <p className="mt-1 text-2xl font-semibold">
-                {budgetPlan.covered}
+                {formatMoney(plan.allocatedCents)}
               </p>
             </div>
             <div className="rounded-lg bg-white/10 p-3">
               <p className="text-sm text-slate-300">Flexible</p>
               <p className="mt-1 text-2xl font-semibold">
-                {budgetPlan.flexible}
+                {formatMoney(plan.flexibleCents)}
               </p>
             </div>
+          </div>
+          <div className="rounded-lg bg-white/10 p-3 text-sm text-slate-300">
+            {summary.hasShortfall
+              ? `${summary.partialItems + summary.unfundedItems} items need another plan.`
+              : `${summary.fundedBills} bills are covered before the next paycheck.`}
           </div>
           <div className="space-y-3">
             {cashFlow.map((item) => (
               <div key={item.label}>
                 <div className="mb-1 flex justify-between text-sm">
                   <span className="text-slate-300">{item.label}</span>
-                  <span>${item.value.toLocaleString()}</span>
+                  <span>{formatMoney(item.value)}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-white/10">
                   <div
@@ -252,6 +287,8 @@ export function BudgetCompanion() {
 }
 
 export function AllocationCard() {
+  const plan = sampleAllocationPlan;
+
   return (
     <Card className="border-white/80 bg-white/84 shadow-sm backdrop-blur">
       <CardHeader className="flex-row items-center justify-between space-y-0">
@@ -265,31 +302,57 @@ export function AllocationCard() {
         </Button>
       </CardHeader>
       <CardContent className="space-y-3">
-        {budgetPlan.bills.map((bill) => (
+        {plan.items.map((item) => (
           <div
-            key={bill.name}
+            key={item.id}
             className="grid gap-3 rounded-lg border border-border/70 bg-background/70 p-3 sm:grid-cols-[1fr_auto]"
           >
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <p className="font-medium">{bill.name}</p>
-                <Badge variant="secondary" className="rounded-md">
-                  {bill.priority}
+                <p className="font-medium">{item.name}</p>
+                <Badge
+                  variant={getAllocationBadgeVariant(item)}
+                  className="rounded-md"
+                >
+                  {item.status}
                 </Badge>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                {bill.reason}
+                {item.reason}
               </p>
             </div>
             <div className="sm:text-right">
-              <p className="text-lg font-semibold">{bill.amount}</p>
-              <p className="text-sm text-muted-foreground">{bill.due}</p>
+              <p className="text-lg font-semibold">
+                {formatMoney(item.allocatedCents)}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {item.dueDate ? formatDate(item.dueDate) : formatMoney(item.requestedCents)}
+              </p>
             </div>
           </div>
         ))}
       </CardContent>
     </Card>
   );
+}
+
+function formatDate(date: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(`${date}T00:00:00`));
+}
+
+function getAllocationBadgeVariant(item: AllocationItem) {
+  if (item.status === "unfunded" || item.status === "partial") {
+    return "destructive";
+  }
+
+  if (item.status === "held") {
+    return "outline";
+  }
+
+  return "secondary";
 }
 
 export function KidsMoneySummary() {

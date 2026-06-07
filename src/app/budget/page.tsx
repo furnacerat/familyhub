@@ -12,7 +12,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { billCatalog, paychecks } from "@/lib/family-data";
+import { formatMoney } from "@/lib/budget-engine";
+import { sampleBills, samplePaychecks } from "@/lib/budget-sample-data";
 
 export default function BudgetPage() {
   return (
@@ -36,9 +37,9 @@ export default function BudgetPage() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-3">
-            {paychecks.map((check) => (
+            {samplePaychecks.map((check) => (
               <div
-                key={`${check.earner}-${check.date}`}
+                key={check.id}
                 className="grid gap-3 rounded-lg border border-border/70 bg-background/70 p-3 sm:grid-cols-[1fr_auto]"
               >
                 <div className="flex gap-3">
@@ -48,12 +49,14 @@ export default function BudgetPage() {
                   <div>
                     <p className="font-medium">{check.earner}</p>
                     <p className="text-sm text-muted-foreground">
-                      {check.date} - {check.cadence}
+                      {formatDate(check.payDate)}
                     </p>
                   </div>
                 </div>
                 <div className="sm:text-right">
-                  <p className="text-lg font-semibold">{check.amount}</p>
+                  <p className="text-lg font-semibold">
+                    {formatMoney(check.amountCents)}
+                  </p>
                   <Badge variant="secondary">{check.status}</Badge>
                 </div>
               </div>
@@ -66,9 +69,9 @@ export default function BudgetPage() {
             <CardTitle>Manual bill catalog</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {billCatalog.map((bill) => (
+            {sampleBills.map((bill) => (
               <div
-                key={bill.name}
+                key={bill.id}
                 className="grid gap-3 rounded-lg border border-border/70 bg-background/70 p-3 sm:grid-cols-[1fr_auto]"
               >
                 <div className="flex gap-3">
@@ -78,13 +81,18 @@ export default function BudgetPage() {
                   <div>
                     <p className="font-medium">{bill.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {bill.category} - due {bill.due}
+                      {formatCategory(bill.category)} - due{" "}
+                      {formatDate(bill.dueDate)}
                     </p>
                   </div>
                 </div>
                 <div className="sm:text-right">
-                  <p className="text-lg font-semibold">{bill.amount}</p>
-                  <Badge variant="outline">{bill.status}</Badge>
+                  <p className="text-lg font-semibold">
+                    {formatMoney(bill.amountCents)}
+                  </p>
+                  <Badge variant={bill.paid ? "secondary" : "outline"}>
+                    {bill.paid ? "Paid" : bill.priority}
+                  </Badge>
                 </div>
               </div>
             ))}
@@ -94,4 +102,19 @@ export default function BudgetPage() {
       <AllocationCard />
     </AppFrame>
   );
+}
+
+function formatDate(date: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(`${date}T00:00:00`));
+}
+
+function formatCategory(category: string): string {
+  return category
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }

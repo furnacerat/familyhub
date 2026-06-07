@@ -34,4 +34,4 @@ Then open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 - Add authentication and household roles.
 - Add database schema for family, budget, kids money, and maintenance data.
 - Convert the static dashboard sections into real routes and forms.
-- Implement the paycheck allocation engine.
+- Wire budget forms to the tested paycheck allocation engine.
