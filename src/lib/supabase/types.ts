@@ -112,6 +112,14 @@ export type Database = {
           accepted_at: string | null;
         }[];
       };
+      create_household_invite: {
+        Args: {
+          invite_email: string;
+          invite_role: HouseholdRole;
+          invite_budget_access: boolean;
+        };
+        Returns: string;
+      };
       accept_household_invite: {
         Args: {
           invite_token: string;

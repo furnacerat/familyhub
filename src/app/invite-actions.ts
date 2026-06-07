@@ -16,24 +16,18 @@ export async function createInvite(formData: FormData) {
   const budgetAccess = formData.get("budgetAccess") === "on";
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("household_invites")
-    .insert({
-      household_id: profile.household_id,
-      email,
-      role,
-      budget_access: budgetAccess && (role === "owner" || role === "adult"),
-      created_by: profile.id,
-    })
-    .select("token")
-    .single();
+  const { data: token, error } = await supabase.rpc("create_household_invite", {
+    invite_email: email,
+    invite_role: role,
+    invite_budget_access: budgetAccess,
+  });
 
-  if (error || !data) {
+  if (error || !token) {
     redirect(`/settings/invites?message=${encodeURIComponent(error?.message ?? "Invite failed")}`);
   }
 
   const origin = (await headers()).get("origin") ?? "http://127.0.0.1:3000";
-  const inviteUrl = `${origin}/invite/${data.token}`;
+  const inviteUrl = `${origin}/invite/${token}`;
 
   redirect(`/settings/invites?invite=${encodeURIComponent(inviteUrl)}&email=${encodeURIComponent(email)}`);
 }
