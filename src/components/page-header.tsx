@@ -6,6 +6,7 @@ type PageHeaderProps = {
   title: string;
   description: string;
   action?: string;
+  onAction?: () => void;
 };
 
 export function PageHeader({
@@ -13,6 +14,7 @@ export function PageHeader({
   title,
   description,
   action,
+  onAction,
 }: PageHeaderProps) {
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-white/80 bg-white/84 p-4 shadow-sm backdrop-blur sm:flex-row sm:items-end sm:justify-between sm:p-5">
@@ -27,7 +29,11 @@ export function PageHeader({
           {description}
         </p>
       </div>
-      {action ? <Button className="sm:self-center">{action}</Button> : null}
+      {action ? (
+        <Button className="sm:self-center" onClick={onAction}>
+          {action}
+        </Button>
+      ) : null}
     </section>
   );
 }

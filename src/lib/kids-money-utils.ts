@@ -13,6 +13,12 @@ export type KidChore = {
   title: string;
   rewardCents: number;
   status: ChoreStatus;
+  responsibilityType: "family" | "paid-job";
+  recurrence: "once" | "daily" | "weekly" | "monthly";
+  dueDate?: string;
+  dueTime?: string;
+  proofNote?: string;
+  streakCount: number;
 };
 
 export type KidTransaction = {
@@ -26,6 +32,8 @@ export type KidTransaction = {
 export type KidProfile = {
   id: string;
   name: string;
+  birthDate?: string;
+  profileId?: string;
   walletCents: number;
   allowanceCents: number;
   allowanceDay: string;

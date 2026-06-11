@@ -1,8 +1,10 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
+  ClipboardCheck,
   Coins,
   PiggyBank,
   Plus,
@@ -39,20 +41,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  addKidGoal,
-  addKidTransaction,
   addSavingsToGoal,
-  approveChore,
   formatKidMoney,
   getGoalProgress,
   getKidStats,
-  requestChoreApproval,
   type KidProfile,
   type KidTransactionType,
 } from "@/lib/kids-money-utils";
+import {
+  addKidMoney,
+  approveKidChore,
+  createKidResponsibility,
+  createKidGoal,
+  requestKidChore,
+  returnKidChore,
+  saveToKidGoal,
+} from "@/app/data-actions";
+import { useHouseholdRealtime } from "@/hooks/use-household-realtime";
 
 type KidsMoneyWorkspaceProps = {
+  householdId: string;
   initialKids: KidProfile[];
+  canManage: boolean;
+  viewMode: "parent" | "child";
 };
 
 type MoneyFormState = {
@@ -66,6 +77,15 @@ type GoalFormState = {
   target: string;
 };
 
+type ResponsibilityFormState = {
+  title: string;
+  type: "family" | "paid-job";
+  recurrence: "once" | "daily" | "weekly" | "monthly";
+  reward: string;
+  dueDate: string;
+  dueTime: string;
+};
+
 const emptyMoneyForm: MoneyFormState = {
   type: "deposit",
   amount: "",
@@ -77,26 +97,65 @@ const emptyGoalForm: GoalFormState = {
   target: "",
 };
 
-export function KidsMoneyWorkspace({ initialKids }: KidsMoneyWorkspaceProps) {
+const emptyResponsibilityForm: ResponsibilityFormState = {
+  title: "",
+  type: "family",
+  recurrence: "weekly",
+  reward: "",
+  dueDate: "",
+  dueTime: "",
+};
+
+const realtimeTables = [
+  "kid_profiles",
+  "kid_goals",
+  "kid_chores",
+  "kid_transactions",
+];
+
+export function KidsMoneyWorkspace({
+  householdId,
+  initialKids,
+  canManage,
+  viewMode,
+}: KidsMoneyWorkspaceProps) {
+  const router = useRouter();
   const [kids, setKids] = useState(initialKids);
   const [selectedKidId, setSelectedKidId] = useState(initialKids[0]?.id ?? "");
   const [moneyOpen, setMoneyOpen] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
+  const [responsibilityOpen, setResponsibilityOpen] = useState(false);
+  const [completionChoreId, setCompletionChoreId] = useState<string | null>(null);
+  const [completionNote, setCompletionNote] = useState("");
   const [moneyForm, setMoneyForm] = useState(emptyMoneyForm);
   const [goalForm, setGoalForm] = useState(emptyGoalForm);
+  const [responsibilityForm, setResponsibilityForm] = useState(
+    emptyResponsibilityForm,
+  );
 
   const selectedKid = useMemo(
     () => kids.find((kid) => kid.id === selectedKidId) ?? kids[0],
     [kids, selectedKidId],
   );
 
+  useHouseholdRealtime(householdId, realtimeTables);
+
   if (!selectedKid) {
-    return null;
+    return (
+      <Card className="border-white/80 bg-white/84 shadow-sm backdrop-blur">
+        <CardHeader>
+          <CardTitle>No child profiles yet</CardTitle>
+          <CardDescription>
+            Add and link child profiles from household settings.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
   }
 
   const stats = getKidStats(selectedKid);
 
-  function submitMoney(event: FormEvent<HTMLFormElement>) {
+  async function submitMoney(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const amountCents = dollarsToCents(moneyForm.amount);
     const label = moneyForm.label.trim();
@@ -105,18 +164,22 @@ export function KidsMoneyWorkspace({ initialKids }: KidsMoneyWorkspaceProps) {
       return;
     }
 
-    setKids((current) =>
-      addKidTransaction(current, selectedKid.id, {
-        type: moneyForm.type,
-        amountCents,
-        label,
-      }),
-    );
+    if (moneyForm.type !== "deposit" && moneyForm.type !== "spend") {
+      return;
+    }
+
+    await addKidMoney({
+      kidId: selectedKid.id,
+      type: moneyForm.type,
+      amountCents,
+      label,
+    });
     setMoneyForm(emptyMoneyForm);
     setMoneyOpen(false);
+    router.refresh();
   }
 
-  function submitGoal(event: FormEvent<HTMLFormElement>) {
+  async function submitGoal(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const targetCents = dollarsToCents(goalForm.target);
     const name = goalForm.name.trim();
@@ -125,14 +188,41 @@ export function KidsMoneyWorkspace({ initialKids }: KidsMoneyWorkspaceProps) {
       return;
     }
 
-    setKids((current) =>
-      addKidGoal(current, selectedKid.id, {
-        name,
-        targetCents,
-      }),
-    );
+    await createKidGoal({ kidId: selectedKid.id, name, targetCents });
     setGoalForm(emptyGoalForm);
     setGoalOpen(false);
+    router.refresh();
+  }
+
+  async function submitResponsibility(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = responsibilityForm.title.trim();
+    if (!title) return;
+
+    await createKidResponsibility({
+      kidId: selectedKid.id,
+      title,
+      responsibilityType: responsibilityForm.type,
+      recurrence: responsibilityForm.recurrence,
+      rewardCents:
+        responsibilityForm.type === "paid-job"
+          ? dollarsToCents(responsibilityForm.reward)
+          : 0,
+      dueDate: responsibilityForm.dueDate || undefined,
+      dueTime: responsibilityForm.dueTime || undefined,
+    });
+    setResponsibilityForm(emptyResponsibilityForm);
+    setResponsibilityOpen(false);
+    router.refresh();
+  }
+
+  async function submitCompletion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!completionChoreId) return;
+    await requestKidChore(selectedKid.id, completionChoreId, completionNote);
+    setCompletionChoreId(null);
+    setCompletionNote("");
+    router.refresh();
   }
 
   return (
@@ -140,40 +230,70 @@ export function KidsMoneyWorkspace({ initialKids }: KidsMoneyWorkspaceProps) {
       <section className="flex flex-col gap-3 rounded-lg border border-white/80 bg-white/84 p-4 shadow-sm backdrop-blur sm:flex-row sm:items-end sm:justify-between sm:p-5">
         <div className="max-w-3xl">
           <Badge variant="secondary" className="mb-3 rounded-md">
-            Kid-friendly budgeting
+            {viewMode === "child" ? "My money and responsibilities" : "Family members"}
           </Badge>
           <h2 className="text-3xl font-semibold leading-tight sm:text-4xl">
-            Money habits they can understand.
+            {viewMode === "child"
+              ? "Your goals, earnings, and next steps."
+              : "Age-aware independence with parent oversight."}
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
-            Track wallet money, savings goals, allowance, chores, and spending
-            without exposing the adult household budget.
+            {viewMode === "child"
+              ? "See only your own information, request approvals, and manage your goals."
+              : "Support each child without exposing the adult household budget."}
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <MoneyDialog
-            form={moneyForm}
-            open={moneyOpen}
-            onOpenChange={setMoneyOpen}
-            onSubmit={submitMoney}
-            onUpdate={(key, value) =>
-              setMoneyForm((current) => ({ ...current, [key]: value }))
-            }
-          />
-          <GoalDialog
-            form={goalForm}
-            open={goalOpen}
-            onOpenChange={setGoalOpen}
-            onSubmit={submitGoal}
-            onUpdate={(key, value) =>
-              setGoalForm((current) => ({ ...current, [key]: value }))
-            }
-          />
+          {canManage ? (
+            <>
+              <MoneyDialog
+                form={moneyForm}
+                open={moneyOpen}
+                onOpenChange={setMoneyOpen}
+                onSubmit={submitMoney}
+                onUpdate={(key, value) =>
+                  setMoneyForm((current) => ({ ...current, [key]: value }))
+                }
+              />
+              <GoalDialog
+                form={goalForm}
+                open={goalOpen}
+                onOpenChange={setGoalOpen}
+                onSubmit={submitGoal}
+                onUpdate={(key, value) =>
+                  setGoalForm((current) => ({ ...current, [key]: value }))
+                }
+              />
+              <ResponsibilityDialog
+                form={responsibilityForm}
+                open={responsibilityOpen}
+                onOpenChange={setResponsibilityOpen}
+                onSubmit={submitResponsibility}
+                onUpdate={(key, value) =>
+                  setResponsibilityForm((current) => ({
+                    ...current,
+                    [key]: value,
+                  }))
+                }
+              />
+            </>
+          ) : (
+            <GoalDialog
+              form={goalForm}
+              open={goalOpen}
+              onOpenChange={setGoalOpen}
+              onSubmit={submitGoal}
+              onUpdate={(key, value) =>
+                setGoalForm((current) => ({ ...current, [key]: value }))
+              }
+            />
+          )}
         </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.82fr_1.18fr]">
         <div className="space-y-4">
+          {viewMode === "parent" ? (
           <Card className="border-white/80 bg-white/84 shadow-sm backdrop-blur">
             <CardHeader>
               <CardDescription>Child profile</CardDescription>
@@ -211,6 +331,7 @@ export function KidsMoneyWorkspace({ initialKids }: KidsMoneyWorkspaceProps) {
               </div>
             </CardContent>
           </Card>
+          ) : null}
 
           <Card className="border-white/80 bg-white/84 shadow-sm backdrop-blur">
             <CardHeader>
@@ -268,7 +389,7 @@ export function KidsMoneyWorkspace({ initialKids }: KidsMoneyWorkspaceProps) {
                       size="sm"
                       variant="outline"
                       disabled={selectedKid.walletCents <= 0}
-                      onClick={() =>
+                      onClick={async () => {
                         setKids((current) =>
                           addSavingsToGoal(
                             current,
@@ -276,8 +397,14 @@ export function KidsMoneyWorkspace({ initialKids }: KidsMoneyWorkspaceProps) {
                             goal.id,
                             Math.min(500, selectedKid.walletCents),
                           ),
-                        )
-                      }
+                        );
+                        await saveToKidGoal({
+                          kidId: selectedKid.id,
+                          goalId: goal.id,
+                          amountCents: Math.min(500, selectedKid.walletCents),
+                        });
+                        router.refresh();
+                      }}
                     >
                       Save $5
                     </Button>
@@ -313,30 +440,56 @@ export function KidsMoneyWorkspace({ initialKids }: KidsMoneyWorkspaceProps) {
                       </Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Earns {formatKidMoney(chore.rewardCents)}
+                      {chore.responsibilityType === "paid-job"
+                        ? `Paid job - earns ${formatKidMoney(chore.rewardCents)}`
+                        : "Family responsibility"}
+                      {" - "}
+                      {chore.recurrence}
                     </p>
+                    {chore.dueDate ? (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Due {formatKidDate(chore.dueDate)}
+                        {chore.dueTime ? ` at ${formatKidTime(chore.dueTime)}` : ""}
+                      </p>
+                    ) : null}
+                    {chore.proofNote ? (
+                      <p className="mt-2 rounded-md bg-muted p-2 text-sm">
+                        Completion note: {chore.proofNote}
+                      </p>
+                    ) : null}
+                    {chore.streakCount > 0 ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {chore.streakCount} approved completions
+                      </p>
+                    ) : null}
                   </div>
                   {chore.status === "available" ? (
                     <Button
                       variant="outline"
-                      onClick={() =>
-                        setKids((current) =>
-                          requestChoreApproval(current, selectedKid.id, chore.id),
-                        )
-                      }
+                      onClick={() => setCompletionChoreId(chore.id)}
                     >
-                      Request
+                      Mark done
                     </Button>
-                  ) : chore.status === "pending" ? (
-                    <Button
-                      onClick={() =>
-                        setKids((current) =>
-                          approveChore(current, selectedKid.id, chore.id),
-                        )
-                      }
-                    >
-                      Approve
-                    </Button>
+                  ) : chore.status === "pending" && canManage ? (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          await returnKidChore(selectedKid.id, chore.id);
+                          router.refresh();
+                        }}
+                      >
+                        Send back
+                      </Button>
+                      <Button
+                        onClick={async () => {
+                          await approveKidChore(selectedKid.id, chore.id);
+                          router.refresh();
+                        }}
+                      >
+                        Approve
+                      </Button>
+                    </div>
                   ) : (
                     <Badge variant="outline" className="h-fit">
                       <CheckCircle2 className="size-3" />
@@ -374,7 +527,175 @@ export function KidsMoneyWorkspace({ initialKids }: KidsMoneyWorkspaceProps) {
           </Card>
         </div>
       </section>
+      <CompletionDialog
+        open={Boolean(completionChoreId)}
+        note={completionNote}
+        onNoteChange={setCompletionNote}
+        onOpenChange={(open) => {
+          if (!open) setCompletionChoreId(null);
+        }}
+        onSubmit={submitCompletion}
+      />
     </>
+  );
+}
+
+function ResponsibilityDialog({
+  form,
+  open,
+  onOpenChange,
+  onSubmit,
+  onUpdate,
+}: {
+  form: ResponsibilityFormState;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+  onUpdate: <K extends keyof ResponsibilityFormState>(
+    key: K,
+    value: ResponsibilityFormState[K],
+  ) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          <ClipboardCheck className="size-4" />
+          Responsibility
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <form onSubmit={onSubmit}>
+          <DialogHeader>
+            <DialogTitle>Add responsibility</DialogTitle>
+            <DialogDescription>
+              Family responsibilities are unpaid. Optional paid jobs earn money
+              after adult approval.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="responsibility-title">Title</Label>
+              <Input
+                id="responsibility-title"
+                value={form.title}
+                onChange={(event) => onUpdate("title", event.target.value)}
+                required
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label>Type</Label>
+                <Select
+                  value={form.type}
+                  onValueChange={(value) =>
+                    onUpdate("type", value as ResponsibilityFormState["type"])
+                  }
+                >
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="family">Family responsibility</SelectItem>
+                    <SelectItem value="paid-job">Paid job</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Repeats</Label>
+                <Select
+                  value={form.recurrence}
+                  onValueChange={(value) =>
+                    onUpdate(
+                      "recurrence",
+                      value as ResponsibilityFormState["recurrence"],
+                    )
+                  }
+                >
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="once">One time</SelectItem>
+                    <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {form.type === "paid-job" ? (
+              <div className="grid gap-2">
+                <Label htmlFor="responsibility-reward">Reward</Label>
+                <Input
+                  id="responsibility-reward"
+                  inputMode="decimal"
+                  value={form.reward}
+                  onChange={(event) => onUpdate("reward", event.target.value)}
+                />
+              </div>
+            ) : null}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="responsibility-date">Next due date</Label>
+                <Input
+                  id="responsibility-date"
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(event) => onUpdate("dueDate", event.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="responsibility-time">Due time</Label>
+                <Input
+                  id="responsibility-time"
+                  type="time"
+                  value={form.dueTime}
+                  onChange={(event) => onUpdate("dueTime", event.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter><Button type="submit">Add responsibility</Button></DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CompletionDialog({
+  open,
+  note,
+  onNoteChange,
+  onOpenChange,
+  onSubmit,
+}: {
+  open: boolean;
+  note: string;
+  onNoteChange: (value: string) => void;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <form onSubmit={onSubmit}>
+          <DialogHeader>
+            <DialogTitle>Mark responsibility done</DialogTitle>
+            <DialogDescription>
+              Add a short note when context would help the adult reviewing it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="completion-note">Completion note</Label>
+            <Input
+              id="completion-note"
+              className="mt-2"
+              value={note}
+              onChange={(event) => onNoteChange(event.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+          <DialogFooter><Button type="submit">Request approval</Button></DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -388,7 +709,7 @@ function MoneyDialog({
   form: MoneyFormState;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   onUpdate: <K extends keyof MoneyFormState>(key: K, value: MoneyFormState[K]) => void;
 }) {
   return (
@@ -466,7 +787,7 @@ function GoalDialog({
   form: GoalFormState;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   onUpdate: <K extends keyof GoalFormState>(key: K, value: GoalFormState[K]) => void;
 }) {
   return (
@@ -542,4 +863,18 @@ function dollarsToCents(value: string) {
   }
 
   return Math.round(numeric * 100);
+}
+
+function formatKidDate(date: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(`${date}T00:00:00`));
+}
+
+function formatKidTime(time: string) {
+  const [hourValue, minute] = time.split(":").map(Number);
+  const period = hourValue >= 12 ? "PM" : "AM";
+  const hour = hourValue % 12 || 12;
+  return `${hour}:${String(minute).padStart(2, "0")} ${period}`;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   Filter,
@@ -40,9 +41,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { householdLists, listPeople } from "@/lib/list-data";
 import {
-  createListItemId,
+  createListItem,
+  deleteListItem,
+  setListItemChecked,
+} from "@/app/data-actions";
+import { householdLists } from "@/lib/list-data";
+import {
   filterListItems,
   getListLabel,
   getListStats,
@@ -53,10 +58,13 @@ import {
   type HouseholdListType,
   type ListStatusFilter,
 } from "@/lib/list-utils";
+import { useHouseholdRealtime } from "@/hooks/use-household-realtime";
 import { cn } from "@/lib/utils";
 
 type ListsWorkspaceProps = {
+  householdId: string;
   initialItems: HouseholdListItem[];
+  people: string[];
 };
 
 type ListFormState = {
@@ -75,7 +83,14 @@ const emptyForm: ListFormState = {
   notes: "",
 };
 
-export function ListsWorkspace({ initialItems }: ListsWorkspaceProps) {
+const realtimeTables = ["household_lists", "list_items"];
+
+export function ListsWorkspace({
+  householdId,
+  initialItems,
+  people,
+}: ListsWorkspaceProps) {
+  const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [activeList, setActiveList] = useState<HouseholdListType | "all">("all");
   const [status, setStatus] = useState<ListStatusFilter>("open");
@@ -91,6 +106,8 @@ export function ListsWorkspace({ initialItems }: ListsWorkspaceProps) {
   const stats = getListStats(items);
   const grouped = useMemo(() => groupItemsByList(items), [items]);
 
+  useHouseholdRealtime(householdId, realtimeTables);
+
   function updateForm<K extends keyof ListFormState>(
     key: K,
     value: ListFormState[K],
@@ -98,7 +115,7 @@ export function ListsWorkspace({ initialItems }: ListsWorkspaceProps) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function submitItem(event: FormEvent<HTMLFormElement>) {
+  async function submitItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const name = form.name.trim();
@@ -106,23 +123,18 @@ export function ListsWorkspace({ initialItems }: ListsWorkspaceProps) {
       return;
     }
 
-    const createdAt = new Date().toISOString();
-    const newItem: HouseholdListItem = {
-      id: createListItemId({ name, list: form.list, createdAt }),
+    await createListItem({
       name,
       list: form.list,
       addedBy: form.addedBy,
-      checked: false,
       quantity: form.quantity.trim() || undefined,
       notes: form.notes.trim() || undefined,
-      createdAt,
-    };
-
-    setItems((current) => [newItem, ...current]);
-    setActiveList(newItem.list);
+    });
+    setActiveList(form.list);
     setStatus("open");
-    setForm({ ...emptyForm, list: newItem.list, addedBy: form.addedBy });
+    setForm({ ...emptyForm, list: form.list, addedBy: form.addedBy });
     setDialogOpen(false);
+    router.refresh();
   }
 
   return (
@@ -146,6 +158,7 @@ export function ListsWorkspace({ initialItems }: ListsWorkspaceProps) {
           onOpenChange={setDialogOpen}
           onSubmit={submitItem}
           onUpdate={updateForm}
+          people={people}
         />
       </section>
 
@@ -273,8 +286,16 @@ export function ListsWorkspace({ initialItems }: ListsWorkspaceProps) {
                 <ListItemRow
                   key={item.id}
                   item={item}
-                  onRemove={() => setItems((current) => removeListItem(current, item.id))}
-                  onToggle={() => setItems((current) => toggleListItem(current, item.id))}
+                  onRemove={async () => {
+                    setItems((current) => removeListItem(current, item.id));
+                    await deleteListItem(item.id);
+                    router.refresh();
+                  }}
+                  onToggle={async () => {
+                    setItems((current) => toggleListItem(current, item.id));
+                    await setListItemChecked(item.id, !item.checked);
+                    router.refresh();
+                  }}
                 />
               ))
             ) : (
@@ -299,15 +320,17 @@ function AddItemDialog({
   onOpenChange,
   onSubmit,
   onUpdate,
+  people,
 }: {
   form: ListFormState;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   onUpdate: <K extends keyof ListFormState>(
     key: K,
     value: ListFormState[K],
   ) => void;
+  people: string[];
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -322,8 +345,7 @@ function AddItemDialog({
           <DialogHeader>
             <DialogTitle>Add list item</DialogTitle>
             <DialogDescription>
-              Items added here stay in this browser session until database
-              persistence is added.
+              Items are shared with your household and update across devices.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -368,7 +390,7 @@ function AddItemDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {listPeople.map((person) => (
+                    {people.map((person) => (
                       <SelectItem key={person} value={person}>
                         {person}
                       </SelectItem>

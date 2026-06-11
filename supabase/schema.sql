@@ -85,6 +85,8 @@ create table if not exists public.kid_profiles (
   wallet_cents integer not null default 0,
   allowance_cents integer not null default 0,
   allowance_day text not null default 'Sunday',
+  birth_date date,
+  profile_id uuid unique references public.profiles(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
@@ -105,7 +107,28 @@ create table if not exists public.kid_chores (
   title text not null,
   reward_cents integer not null,
   status text not null default 'available',
+  responsibility_type text not null default 'paid-job'
+    check (responsibility_type in ('family', 'paid-job')),
+  recurrence text not null default 'once'
+    check (recurrence in ('once', 'daily', 'weekly', 'monthly')),
+  due_date date,
+  due_time time,
+  proof_note text,
+  requested_at timestamptz,
+  approved_at timestamptz,
+  streak_count integer not null default 0,
   created_at timestamptz not null default now()
+);
+
+create table if not exists public.kid_responsibility_completions (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  kid_id uuid not null references public.kid_profiles(id) on delete cascade,
+  chore_id uuid not null references public.kid_chores(id) on delete cascade,
+  completed_at timestamptz not null default now(),
+  proof_note text,
+  reward_cents integer not null default 0,
+  approved_by uuid references public.profiles(id) on delete set null
 );
 
 create table if not exists public.kid_transactions (
@@ -180,6 +203,97 @@ create table if not exists public.budget_reserves (
   amount_cents integer not null,
   category text not null,
   priority text not null default 'essential',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.ride_requests (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  kid_id uuid not null references public.kid_profiles(id) on delete cascade,
+  pickup text not null,
+  destination text not null,
+  needed_at timestamptz not null,
+  status text not null default 'requested'
+    check (status in ('requested', 'claimed', 'completed', 'cancelled')),
+  driver_name text,
+  notes text,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.teen_work_entries (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  kid_id uuid not null references public.kid_profiles(id) on delete cascade,
+  employer text not null,
+  shift_date date not null,
+  start_time time not null,
+  end_time time,
+  expected_income_cents integer not null default 0,
+  notes text,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.teen_vehicle_logs (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  kid_id uuid not null references public.kid_profiles(id) on delete cascade,
+  vehicle text not null,
+  entry_type text not null
+    check (entry_type in ('fuel', 'mileage', 'maintenance', 'insurance')),
+  logged_on date not null,
+  amount_cents integer not null default 0,
+  mileage integer,
+  notes text,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.teen_money_items (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  kid_id uuid not null references public.kid_profiles(id) on delete cascade,
+  item_type text not null
+    check (item_type in ('spending-plan', 'reimbursement')),
+  label text not null,
+  amount_cents integer not null,
+  due_date date,
+  direction text
+    check (direction in ('family-owes-kid', 'kid-owes-family')),
+  status text not null default 'open'
+    check (status in ('open', 'settled')),
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  recipient_profile_id uuid not null references public.profiles(id) on delete cascade,
+  notification_type text not null,
+  title text not null,
+  body text not null,
+  href text,
+  read_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.notification_preferences (
+  profile_id uuid primary key references public.profiles(id) on delete cascade,
+  household_id uuid not null references public.households(id) on delete cascade,
+  in_app boolean not null default true,
+  daily_digest boolean not null default false,
+  digest_time time not null default '18:00',
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.calendar_feed_tokens (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  token uuid not null default gen_random_uuid() unique,
+  revoked boolean not null default false,
+  created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
@@ -420,11 +534,19 @@ alter table public.kid_profiles enable row level security;
 alter table public.kid_goals enable row level security;
 alter table public.kid_chores enable row level security;
 alter table public.kid_transactions enable row level security;
+alter table public.kid_responsibility_completions enable row level security;
 alter table public.maintenance_tasks enable row level security;
 alter table public.maintenance_completions enable row level security;
 alter table public.budget_paychecks enable row level security;
 alter table public.budget_bills enable row level security;
 alter table public.budget_reserves enable row level security;
+alter table public.ride_requests enable row level security;
+alter table public.teen_work_entries enable row level security;
+alter table public.teen_vehicle_logs enable row level security;
+alter table public.teen_money_items enable row level security;
+alter table public.notifications enable row level security;
+alter table public.notification_preferences enable row level security;
+alter table public.calendar_feed_tokens enable row level security;
 
 drop policy if exists "household members read household" on public.households;
 drop policy if exists "household members read profiles" on public.profiles;
@@ -678,3 +800,7 @@ create policy "budget users write reserves"
     household_id = public.current_household_id()
     and public.current_profile_budget_access()
   );
+
+-- Apply the contents of phase-1-persistence.sql after this base schema. It
+-- adds child-profile linking, child-specific money visibility, chore RPCs,
+-- and realtime publication membership.

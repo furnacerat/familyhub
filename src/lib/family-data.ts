@@ -9,7 +9,9 @@ import {
   ShieldCheck,
   ShoppingCart,
   Sparkles,
+  Route,
   UserPlus,
+  Users,
   Wrench,
 } from "lucide-react";
 
@@ -53,6 +55,18 @@ export const navItems: NavItem[] = [
     href: "/kids",
     icon: PiggyBank,
     access: ["Owner", "Adult", "Child"],
+  },
+  {
+    label: "Teen Tools",
+    href: "/teen",
+    icon: Route,
+    access: ["Owner", "Adult", "Child"],
+  },
+  {
+    label: "Family",
+    href: "/settings/family",
+    icon: Users,
+    access: ["Owner"],
   },
   {
     label: "Maintain",

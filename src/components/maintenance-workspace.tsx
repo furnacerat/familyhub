@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Car,
   CheckCircle2,
@@ -41,14 +42,12 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  maintenanceCategories,
-  maintenancePeople,
-  maintenanceToday,
-} from "@/lib/maintenance-data";
+  completeMaintenance,
+  createMaintenanceTask as persistMaintenanceTask,
+} from "@/app/data-actions";
+import { maintenanceCategories } from "@/lib/maintenance-data";
 import {
-  addMaintenanceTask,
   completeMaintenanceTask,
-  createMaintenanceTaskId,
   filterMaintenanceTasks,
   formatMaintenanceDate,
   formatMileage,
@@ -62,9 +61,14 @@ import {
   type MaintenanceStatusFilter,
   type MaintenanceTask,
 } from "@/lib/maintenance-utils";
+import { useHouseholdRealtime } from "@/hooks/use-household-realtime";
 
 type MaintenanceWorkspaceProps = {
+  householdId: string;
   initialTasks: MaintenanceTask[];
+  people: string[];
+  today: string;
+  canEdit: boolean;
 };
 
 type TaskFormState = {
@@ -80,20 +84,31 @@ type TaskFormState = {
   notes: string;
 };
 
-const emptyTaskForm: TaskFormState = {
-  title: "",
-  category: "home",
-  appliesTo: "",
-  assignedTo: "Family",
-  cadenceValue: "1",
-  cadenceUnit: "months",
-  nextDueDate: maintenanceToday,
-  currentMileage: "",
-  nextDueMileage: "",
-  notes: "",
-};
+const realtimeTables = ["maintenance_tasks", "maintenance_completions"];
 
-export function MaintenanceWorkspace({ initialTasks }: MaintenanceWorkspaceProps) {
+function getEmptyTaskForm(today: string): TaskFormState {
+  return {
+    title: "",
+    category: "home",
+    appliesTo: "",
+    assignedTo: "Family",
+    cadenceValue: "1",
+    cadenceUnit: "months",
+    nextDueDate: today,
+    currentMileage: "",
+    nextDueMileage: "",
+    notes: "",
+  };
+}
+
+export function MaintenanceWorkspace({
+  householdId,
+  initialTasks,
+  people,
+  today,
+  canEdit,
+}: MaintenanceWorkspaceProps) {
+  const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
   const [category, setCategory] = useState<MaintenanceCategory | "all">("all");
   const [status, setStatus] = useState<MaintenanceStatusFilter>("all");
@@ -103,16 +118,24 @@ export function MaintenanceWorkspace({ initialTasks }: MaintenanceWorkspaceProps
   const [completeTask, setCompleteTask] = useState<MaintenanceTask | null>(null);
   const [completionMileage, setCompletionMileage] = useState("");
   const [completionNote, setCompletionNote] = useState("");
-  const [form, setForm] = useState(emptyTaskForm);
+  const [form, setForm] = useState(() => getEmptyTaskForm(today));
 
   const visibleTasks = filterMaintenanceTasks(
     tasks,
     { category, status, assignedTo, search },
-    maintenanceToday,
+    today,
   );
-  const stats = getMaintenanceStats(tasks, maintenanceToday);
-  const assignees = useMemo(() => getUniqueMaintenanceAssignees(tasks), [tasks]);
+  const stats = getMaintenanceStats(tasks, today);
+  const assignees = useMemo(
+    () =>
+      Array.from(
+        new Set([...people, ...getUniqueMaintenanceAssignees(tasks)]),
+      ).sort(),
+    [people, tasks],
+  );
   const nextTask = visibleTasks[0];
+
+  useHouseholdRealtime(householdId, realtimeTables);
 
   function updateForm<K extends keyof TaskFormState>(
     key: K,
@@ -121,7 +144,7 @@ export function MaintenanceWorkspace({ initialTasks }: MaintenanceWorkspaceProps
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function submitTask(event: FormEvent<HTMLFormElement>) {
+  async function submitTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const title = form.title.trim();
     const appliesTo = form.appliesTo.trim();
@@ -131,8 +154,7 @@ export function MaintenanceWorkspace({ initialTasks }: MaintenanceWorkspaceProps
       return;
     }
 
-    const task: MaintenanceTask = {
-      id: createMaintenanceTaskId(title, appliesTo),
+    const taskInput = {
       title,
       category: form.category,
       appliesTo,
@@ -146,33 +168,41 @@ export function MaintenanceWorkspace({ initialTasks }: MaintenanceWorkspaceProps
           ? parseOptionalNumber(form.nextDueMileage)
           : undefined,
       notes: form.notes.trim() || undefined,
-      completedHistory: [],
     };
 
-    setTasks((current) => addMaintenanceTask(current, task));
-    setCategory(task.category);
-    setForm({ ...emptyTaskForm, category: task.category, assignedTo: task.assignedTo });
+    await persistMaintenanceTask(taskInput);
+    setCategory(taskInput.category);
+    setForm({
+      ...getEmptyTaskForm(today),
+      category: taskInput.category,
+      assignedTo: taskInput.assignedTo,
+    });
     setTaskOpen(false);
+    router.refresh();
   }
 
-  function submitCompletion(event: FormEvent<HTMLFormElement>) {
+  async function submitCompletion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!completeTask) {
       return;
     }
 
+    const mileage = parseOptionalNumber(completionMileage);
     setTasks((current) =>
-      completeMaintenanceTask(
-        current,
-        completeTask.id,
-        maintenanceToday,
-        parseOptionalNumber(completionMileage),
-        completionNote,
-      ),
+      completeMaintenanceTask(current, completeTask.id, today, mileage, completionNote),
     );
+    await completeMaintenance({
+      taskId: completeTask.id,
+      completedAt: today,
+      mileage,
+      note: completionNote,
+      cadenceValue: completeTask.cadenceValue,
+      cadenceUnit: completeTask.cadenceUnit,
+    });
     setCompleteTask(null);
     setCompletionMileage("");
     setCompletionNote("");
+    router.refresh();
   }
 
   return (
@@ -190,13 +220,16 @@ export function MaintenanceWorkspace({ initialTasks }: MaintenanceWorkspaceProps
             ownership, and keep a completion history.
           </p>
         </div>
-        <AddTaskDialog
-          form={form}
-          open={taskOpen}
-          onOpenChange={setTaskOpen}
-          onSubmit={submitTask}
-          onUpdate={updateForm}
-        />
+        {canEdit ? (
+          <AddTaskDialog
+            form={form}
+            open={taskOpen}
+            onOpenChange={setTaskOpen}
+            onSubmit={submitTask}
+            onUpdate={updateForm}
+            people={people}
+          />
+        ) : null}
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.82fr_1.18fr]">
@@ -296,7 +329,7 @@ export function MaintenanceWorkspace({ initialTasks }: MaintenanceWorkspaceProps
               {nextTask ? (
                 <>
                   <p>{nextTask.appliesTo}</p>
-                  <p>{getStatusLabel(getMaintenanceStatus(nextTask, maintenanceToday))}</p>
+                  <p>{getStatusLabel(getMaintenanceStatus(nextTask, today))}</p>
                   <p>
                     {nextTask.cadenceUnit === "miles"
                       ? `Due at ${formatMileage(nextTask.nextDueMileage)}`
@@ -316,24 +349,26 @@ export function MaintenanceWorkspace({ initialTasks }: MaintenanceWorkspaceProps
               <CardDescription>{visibleTasks.length} visible tasks</CardDescription>
               <CardTitle>Maintenance tracker</CardTitle>
             </div>
-            <Button size="icon" variant="outline" onClick={() => setTaskOpen(true)}>
-              <Plus className="size-4" />
-            </Button>
+            {canEdit ? (
+              <Button size="icon" variant="outline" onClick={() => setTaskOpen(true)}>
+                <Plus className="size-4" />
+              </Button>
+            ) : null}
           </CardHeader>
           <CardContent className="space-y-3">
             {visibleTasks.map((task) => (
               <MaintenanceRow
                 key={task.id}
                 task={task}
-                status={getMaintenanceStatus(task, maintenanceToday)}
-                onComplete={() => {
+                status={getMaintenanceStatus(task, today)}
+                onComplete={canEdit ? () => {
                   setCompleteTask(task);
                   setCompletionMileage(
                     typeof task.currentMileage === "number"
                       ? String(task.currentMileage)
                       : "",
                   );
-                }}
+                } : undefined}
               />
             ))}
           </CardContent>
@@ -363,12 +398,14 @@ function AddTaskDialog({
   onOpenChange,
   onSubmit,
   onUpdate,
+  people,
 }: {
   form: TaskFormState;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   onUpdate: <K extends keyof TaskFormState>(key: K, value: TaskFormState[K]) => void;
+  people: string[];
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -383,8 +420,7 @@ function AddTaskDialog({
           <DialogHeader>
             <DialogTitle>Add maintenance task</DialogTitle>
             <DialogDescription>
-              Tasks added here stay in this browser session until database
-              persistence is added.
+              Tasks are shared with your household and update across devices.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -419,7 +455,7 @@ function AddTaskDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {maintenancePeople.map((person) => (
+                    {people.map((person) => (
                       <SelectItem key={person} value={person}>
                         {person}
                       </SelectItem>
@@ -550,7 +586,7 @@ function CompleteTaskDialog({
   onMileageChange: (value: string) => void;
   onNoteChange: (value: string) => void;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
 }) {
   return (
     <Dialog open={Boolean(task)} onOpenChange={onOpenChange}>
@@ -600,7 +636,7 @@ function MaintenanceRow({
 }: {
   task: MaintenanceTask;
   status: MaintenanceStatus;
-  onComplete: () => void;
+  onComplete?: () => void;
 }) {
   return (
     <div className="grid gap-3 rounded-lg border border-border/70 bg-background/70 p-3 sm:grid-cols-[1fr_auto]">
@@ -636,10 +672,12 @@ function MaintenanceRow({
           ) : null}
         </div>
       </div>
-      <Button variant="outline" onClick={onComplete}>
-        <CheckCircle2 className="size-4" />
-        Done
-      </Button>
+      {onComplete ? (
+        <Button variant="outline" onClick={onComplete}>
+          <CheckCircle2 className="size-4" />
+          Done
+        </Button>
+      ) : null}
     </div>
   );
 }

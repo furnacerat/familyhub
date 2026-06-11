@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CalendarPlus,
   CheckCircle2,
@@ -38,9 +40,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { calendarCategories, calendarPeople } from "@/lib/calendar-data";
+import { createCalendarEvent } from "@/app/data-actions";
+import { calendarCategories } from "@/lib/calendar-data";
 import {
-  createCalendarEventId,
   filterCalendarEvents,
   formatEventDate,
   formatEventTime,
@@ -51,10 +53,15 @@ import {
   type CalendarEvent,
   type CalendarEventCategory,
 } from "@/lib/calendar-utils";
+import { useHouseholdRealtime } from "@/hooks/use-household-realtime";
 import { cn } from "@/lib/utils";
 
 type CalendarWorkspaceProps = {
+  householdId: string;
   initialEvents: CalendarEvent[];
+  people: string[];
+  weekStart: string;
+  canIntegrate: boolean;
 };
 
 type EventFormState = {
@@ -68,37 +75,51 @@ type EventFormState = {
   notes: string;
 };
 
-const weekStart = "2026-06-06";
+const realtimeTables = ["calendar_events"];
 
-const emptyForm: EventFormState = {
-  title: "",
-  date: weekStart,
-  startTime: "09:00",
-  endTime: "",
-  person: "Family",
-  location: "",
-  category: "family",
-  notes: "",
-};
+function getEmptyForm(weekStart: string): EventFormState {
+  return {
+    title: "",
+    date: weekStart,
+    startTime: "09:00",
+    endTime: "",
+    person: "Family",
+    location: "",
+    category: "family",
+    notes: "",
+  };
+}
 
-export function CalendarWorkspace({ initialEvents }: CalendarWorkspaceProps) {
-  const [events, setEvents] = useState(initialEvents);
+export function CalendarWorkspace({
+  householdId,
+  initialEvents,
+  people,
+  weekStart,
+  canIntegrate,
+}: CalendarWorkspaceProps) {
+  const router = useRouter();
+  const events = initialEvents;
   const [selectedDate, setSelectedDate] = useState(weekStart);
   const [personFilter, setPersonFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState<
     CalendarEventCategory | "all"
   >("all");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState<EventFormState>(emptyForm);
+  const [form, setForm] = useState<EventFormState>(() => getEmptyForm(weekStart));
 
-  const weekDays = useMemo(() => getWeekDays(weekStart), []);
-  const people = useMemo(() => getUniquePeople(events), [events]);
+  const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
+  const filterPeople = useMemo(
+    () => Array.from(new Set([...people, ...getUniquePeople(events)])).sort(),
+    [events, people],
+  );
   const visibleEvents = filterCalendarEvents(events, {
     person: personFilter,
     category: categoryFilter,
   });
   const selectedEvents = getEventsForDate(visibleEvents, selectedDate);
   const nextEvent = visibleEvents[0];
+
+  useHouseholdRealtime(householdId, realtimeTables);
 
   function updateForm<K extends keyof EventFormState>(
     key: K,
@@ -107,7 +128,7 @@ export function CalendarWorkspace({ initialEvents }: CalendarWorkspaceProps) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function submitEvent(event: FormEvent<HTMLFormElement>) {
+  async function submitEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const title = form.title.trim();
@@ -115,12 +136,7 @@ export function CalendarWorkspace({ initialEvents }: CalendarWorkspaceProps) {
       return;
     }
 
-    const newEvent: CalendarEvent = {
-      id: createCalendarEventId({
-        title,
-        date: form.date,
-        startTime: form.startTime,
-      }),
+    await createCalendarEvent({
       title,
       date: form.date,
       startTime: form.startTime,
@@ -129,16 +145,12 @@ export function CalendarWorkspace({ initialEvents }: CalendarWorkspaceProps) {
       location: form.location.trim() || undefined,
       category: form.category,
       notes: form.notes.trim() || undefined,
-      requiresAdultApproval: form.person !== "Family" && form.person !== "Jordan",
-    };
-
-    setEvents((current) => filterCalendarEvents([...current, newEvent], {
-      person: "all",
-      category: "all",
-    }));
-    setSelectedDate(newEvent.date);
-    setForm({ ...emptyForm, date: newEvent.date });
+      requiresAdultApproval: !canIntegrate && form.person !== "Family",
+    });
+    setSelectedDate(form.date);
+    setForm({ ...getEmptyForm(weekStart), date: form.date });
     setDialogOpen(false);
+    router.refresh();
   }
 
   return (
@@ -156,13 +168,21 @@ export function CalendarWorkspace({ initialEvents }: CalendarWorkspaceProps) {
             without digging through messages.
           </p>
         </div>
-        <AddEventDialog
-          form={form}
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          onSubmit={submitEvent}
-          onUpdate={updateForm}
-        />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {canIntegrate ? (
+            <Button asChild variant="outline">
+              <Link href="/calendar/integrations">Calendar connections</Link>
+            </Button>
+          ) : null}
+          <AddEventDialog
+            form={form}
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+            onSubmit={submitEvent}
+            onUpdate={updateForm}
+            people={people}
+          />
+        </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.82fr_1.18fr]">
@@ -170,7 +190,7 @@ export function CalendarWorkspace({ initialEvents }: CalendarWorkspaceProps) {
           <Card className="border-white/80 bg-white/84 shadow-sm backdrop-blur">
             <CardHeader>
               <CardDescription>Week view</CardDescription>
-              <CardTitle>June 6-12</CardTitle>
+              <CardTitle>{formatWeekRange(weekDays)}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
               {weekDays.map((day) => {
@@ -228,7 +248,7 @@ export function CalendarWorkspace({ initialEvents }: CalendarWorkspaceProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Everyone</SelectItem>
-                  {people.map((person) => (
+                  {filterPeople.map((person) => (
                     <SelectItem key={person} value={person}>
                       {person}
                     </SelectItem>
@@ -321,15 +341,17 @@ function AddEventDialog({
   onOpenChange,
   onSubmit,
   onUpdate,
+  people,
 }: {
   form: EventFormState;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   onUpdate: <K extends keyof EventFormState>(
     key: K,
     value: EventFormState[K],
   ) => void;
+  people: string[];
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -344,8 +366,7 @@ function AddEventDialog({
           <DialogHeader>
             <DialogTitle>Add calendar event</DialogTitle>
             <DialogDescription>
-              Events added here stay in this browser session until database
-              persistence is added.
+              Events are shared with your household and update across devices.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -401,7 +422,7 @@ function AddEventDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {calendarPeople.map((person) => (
+                    {people.map((person) => (
                       <SelectItem key={person} value={person}>
                         {person}
                       </SelectItem>
@@ -517,4 +538,9 @@ function getCategoryColor(category: CalendarEventCategory): string {
   };
 
   return colors[category];
+}
+
+function formatWeekRange(days: ReturnType<typeof getWeekDays>) {
+  if (!days.length) return "Current week";
+  return `${days[0].dateLabel} - ${days[days.length - 1].dateLabel}`;
 }

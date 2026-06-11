@@ -195,8 +195,11 @@ export function OverviewGrid() {
   );
 }
 
-export function BudgetCompanion() {
-  const plan = sampleAllocationPlan;
+export function BudgetCompanion({
+  plan = sampleAllocationPlan,
+}: {
+  plan?: typeof sampleAllocationPlan;
+}) {
   const summary = getAllocationSummary(plan);
   const cashFlow = [
     {
@@ -286,8 +289,11 @@ export function BudgetCompanion() {
   );
 }
 
-export function AllocationCard() {
-  const plan = sampleAllocationPlan;
+export function AllocationCard({
+  plan = sampleAllocationPlan,
+}: {
+  plan?: typeof sampleAllocationPlan;
+}) {
 
   return (
     <Card className="border-white/80 bg-white/84 shadow-sm backdrop-blur">

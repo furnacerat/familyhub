@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   BellRing,
   CheckCircle2,
@@ -40,10 +41,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { reminderPeople, reminderToday } from "@/lib/reminder-data";
+import {
+  createReminder as persistReminder,
+  deleteReminder,
+  setReminderStatus,
+} from "@/app/data-actions";
 import {
   completeReminder,
-  createReminderId,
   filterReminders,
   formatReminderDate,
   getReminderPriorityLabel,
@@ -58,9 +62,13 @@ import {
   type ReminderStatus,
   type ReminderStatusFilter,
 } from "@/lib/reminder-utils";
+import { useHouseholdRealtime } from "@/hooks/use-household-realtime";
 
 type RemindersWorkspaceProps = {
+  householdId: string;
   initialReminders: Reminder[];
+  people: string[];
+  today: string;
 };
 
 type ReminderFormState = {
@@ -72,32 +80,50 @@ type ReminderFormState = {
   notes: string;
 };
 
-const emptyForm: ReminderFormState = {
-  title: "",
-  dueDate: reminderToday,
-  owner: "Family",
-  priority: "normal",
-  status: "open",
-  notes: "",
-};
+const realtimeTables = ["reminders"];
 
-export function RemindersWorkspace({ initialReminders }: RemindersWorkspaceProps) {
+function getEmptyForm(today: string): ReminderFormState {
+  return {
+    title: "",
+    dueDate: today,
+    owner: "Family",
+    priority: "normal",
+    status: "open",
+    notes: "",
+  };
+}
+
+export function RemindersWorkspace({
+  householdId,
+  initialReminders,
+  people,
+  today,
+}: RemindersWorkspaceProps) {
+  const router = useRouter();
   const [reminders, setReminders] = useState(initialReminders);
   const [status, setStatus] = useState<ReminderStatusFilter>("open");
   const [due, setDue] = useState<ReminderDueFilter>("all");
   const [owner, setOwner] = useState("all");
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState<ReminderFormState>(emptyForm);
+  const [form, setForm] = useState<ReminderFormState>(() => getEmptyForm(today));
 
-  const owners = useMemo(() => getUniqueReminderOwners(reminders), [reminders]);
-  const stats = getReminderStats(reminders, reminderToday);
+  const owners = useMemo(
+    () =>
+      Array.from(
+        new Set([...people, ...getUniqueReminderOwners(reminders)]),
+      ).sort(),
+    [people, reminders],
+  );
+  const stats = getReminderStats(reminders, today);
   const visibleReminders = filterReminders(
     reminders,
     { status, due, owner, search },
-    reminderToday,
+    today,
   );
   const nextReminder = visibleReminders[0];
+
+  useHouseholdRealtime(householdId, realtimeTables);
 
   function updateForm<K extends keyof ReminderFormState>(
     key: K,
@@ -106,7 +132,7 @@ export function RemindersWorkspace({ initialReminders }: RemindersWorkspaceProps
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function submitReminder(event: FormEvent<HTMLFormElement>) {
+  async function submitReminder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const title = form.title.trim();
@@ -114,23 +140,19 @@ export function RemindersWorkspace({ initialReminders }: RemindersWorkspaceProps
       return;
     }
 
-    const createdAt = new Date().toISOString();
-    const reminder: Reminder = {
-      id: createReminderId({ title, dueDate: form.dueDate, createdAt }),
+    await persistReminder({
       title,
       dueDate: form.dueDate,
       owner: form.owner,
       priority: form.priority,
       status: form.status,
       notes: form.notes.trim() || undefined,
-      createdAt,
-    };
-
-    setReminders((current) => [reminder, ...current]);
+    });
     setStatus("open");
-    setOwner(reminder.owner);
-    setForm({ ...emptyForm, owner: reminder.owner });
+    setOwner(form.owner);
+    setForm({ ...getEmptyForm(today), owner: form.owner });
     setDialogOpen(false);
+    router.refresh();
   }
 
   return (
@@ -154,6 +176,7 @@ export function RemindersWorkspace({ initialReminders }: RemindersWorkspaceProps
           onOpenChange={setDialogOpen}
           onSubmit={submitReminder}
           onUpdate={updateForm}
+          people={people}
         />
       </section>
 
@@ -276,15 +299,21 @@ export function RemindersWorkspace({ initialReminders }: RemindersWorkspaceProps
                 <ReminderRow
                   key={reminder.id}
                   reminder={reminder}
-                  onComplete={() =>
-                    setReminders((current) => completeReminder(current, reminder.id))
-                  }
-                  onReopen={() =>
-                    setReminders((current) => reopenReminder(current, reminder.id))
-                  }
-                  onRemove={() =>
-                    setReminders((current) => removeReminder(current, reminder.id))
-                  }
+                  onComplete={async () => {
+                    setReminders((current) => completeReminder(current, reminder.id));
+                    await setReminderStatus(reminder.id, "done");
+                    router.refresh();
+                  }}
+                  onReopen={async () => {
+                    setReminders((current) => reopenReminder(current, reminder.id));
+                    await setReminderStatus(reminder.id, "open");
+                    router.refresh();
+                  }}
+                  onRemove={async () => {
+                    setReminders((current) => removeReminder(current, reminder.id));
+                    await deleteReminder(reminder.id);
+                    router.refresh();
+                  }}
                 />
               ))
             ) : (
@@ -309,15 +338,17 @@ function AddReminderDialog({
   onOpenChange,
   onSubmit,
   onUpdate,
+  people,
 }: {
   form: ReminderFormState;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   onUpdate: <K extends keyof ReminderFormState>(
     key: K,
     value: ReminderFormState[K],
   ) => void;
+  people: string[];
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -332,8 +363,7 @@ function AddReminderDialog({
           <DialogHeader>
             <DialogTitle>Add reminder</DialogTitle>
             <DialogDescription>
-              Reminders added here stay in this browser session until database
-              persistence is added.
+              Reminders are shared with your household and update across devices.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -368,7 +398,7 @@ function AddReminderDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {reminderPeople.map((person) => (
+                    {people.map((person) => (
                       <SelectItem key={person} value={person}>
                         {person}
                       </SelectItem>

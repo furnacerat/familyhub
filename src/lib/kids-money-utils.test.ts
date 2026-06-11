@@ -19,7 +19,17 @@ const kids: KidProfile[] = [
     allowanceCents: 500,
     allowanceDay: "Sunday",
     goals: [{ id: "goal", name: "Helmet", savedCents: 500, targetCents: 2000 }],
-    chores: [{ id: "chore", title: "Trash", rewardCents: 200, status: "available" }],
+    chores: [
+      {
+        id: "chore",
+        title: "Trash",
+        rewardCents: 200,
+        status: "available",
+        responsibilityType: "paid-job",
+        recurrence: "once",
+        streakCount: 0,
+      },
+    ],
     transactions: [],
   },
 ];

@@ -35,6 +35,10 @@ creating your first household. It creates:
 - budget tables with adult-only budget access
 - first-household setup RPC
 
+Then run `supabase/phase-1-persistence.sql`. It adds the completed product
+roadmap: persistent realtime workspaces, private child-profile linking,
+recurring responsibilities, teen tools, notifications, and calendar feeds.
+
 After the SQL is applied, create an account at `/login`, then finish owner setup
 at `/setup`.
 
@@ -45,16 +49,18 @@ can be added later with a server-only mail provider.
 ## Initial App Areas
 
 - `/` - Family dashboard
-- `/calendar` - Shared family calendar with local add-event flow and filters
-- `/lists` - Shopping and household lists with local add/toggle/delete/filter flow
-- `/reminders` - One-off family reminders with local add/complete/reopen/delete/filter flow
+- `/calendar` - Persistent shared calendar with filters and approval-aware events
+- `/lists` - Persistent shopping and household lists
+- `/reminders` - Persistent assigned reminders with completion workflow
 - `/budget` - Adult-only manual budget companion
-- `/kids` - Kid-friendly money goals, wallet activity, chores, and parent approval flow
-- `/maintain` - Home and vehicle maintenance with local add/complete/filter flow for date and mileage tasks
+- `/kids` - Age-aware money goals, responsibilities, paid jobs, and approvals
+- `/maintain` - Persistent home and vehicle maintenance by date or mileage
+- `/teen` - Age-aware rides, work shifts, driving, vehicle costs, and teen money coordination
+- `/notifications` - Actionable household inbox and digest preferences
+- `/calendar/integrations` - Private ICS subscription and calendar import
+- `/settings/family` - Owner-managed child profiles and account linking
 
-## Next Build Steps
+## Roadmap Status
 
-- Apply the Supabase schema in the hosted project.
-- Add member management and invite revocation screens for owner role.
-- Connect local interactive sections to persistent storage.
-- Wire budget forms to the tested paycheck allocation engine.
+See `ROADMAP.md` for the completed implementation checklist and deployment
+requirement.
