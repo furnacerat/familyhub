@@ -689,8 +689,6 @@ begin
     'teen_work_entries',
     'teen_vehicle_logs',
     'teen_money_items'
-    ,'notifications'
-    ,'notification_preferences'
   ]
   loop
     execute format('drop policy if exists "family read own teen data" on public.%I', target_table);
