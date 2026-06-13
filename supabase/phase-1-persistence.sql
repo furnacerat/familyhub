@@ -1,3 +1,5 @@
+-- Run this entire file only after supabase/schema.sql completes successfully.
+
 alter table public.kid_profiles
   add column if not exists profile_id uuid unique references public.profiles(id) on delete set null;
 

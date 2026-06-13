@@ -1,3 +1,6 @@
+-- Run this entire file in a new Supabase SQL Editor query.
+-- Do not run only the column lines inside a CREATE TABLE (...) statement.
+
 create extension if not exists "pgcrypto";
 
 create table if not exists public.households (

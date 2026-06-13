@@ -24,8 +24,9 @@ Then open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 Local secrets live in `.env.local`, which is ignored by Git. Copy `.env.example`
 when setting up another machine.
 
-Run the SQL in `supabase/schema.sql` inside the Supabase SQL editor before
-creating your first household. It creates:
+Open a new Supabase SQL Editor query, paste the entire contents of
+`supabase/schema.sql`, make sure no individual lines are selected, and run the
+whole query before creating your first household. It creates:
 
 - household profiles and roles
 - row level security policies
@@ -35,9 +36,10 @@ creating your first household. It creates:
 - budget tables with adult-only budget access
 - first-household setup RPC
 
-Then run `supabase/phase-1-persistence.sql`. It adds the completed product
-roadmap: persistent realtime workspaces, private child-profile linking,
-recurring responsibilities, teen tools, notifications, and calendar feeds.
+After that query succeeds, open another new query and run the entire contents
+of `supabase/phase-1-persistence.sql`. It adds the completed product roadmap:
+persistent realtime workspaces, private child-profile linking, recurring
+responsibilities, teen tools, notifications, and calendar feeds.
 
 After the SQL is applied, create an account at `/login`, then finish owner setup
 at `/setup`.
